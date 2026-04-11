@@ -1,9 +1,9 @@
-"""RadarCVD-Net — Dual-Stream Radar Sign Language Recognition."""
-from .models import RadarCVDNet, CrossAntennaSelfAttention, AsymmetricCrossAttentionFusion
+"""CAST — Channel-Aware Spatial Transfer Learning with Pseudo-Image Radar."""
+from .models import CASTModel, CrossAntennaSelfAttention, AsymmetricCrossAttentionFusion
 from .data import compute_cvd, DualStreamRTMDataset, TestDualStreamDataset
 
 __all__ = [
-    "RadarCVDNet",
+    "CASTModel",
     "CrossAntennaSelfAttention",
     "AsymmetricCrossAttentionFusion",
     "compute_cvd",

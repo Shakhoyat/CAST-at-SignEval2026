@@ -1,6 +1,6 @@
 # ============================================================
-# RadarCVD-Net — Hyperparameter Configuration
-# CVPR MSLR 2026 Track 2 (Radar-Only)
+# CAST — Channel-Aware Spatial Transfer Learning
+# CVPR MSLR 2026 Track 2 (Radar-Only Sign Language Recognition)
 # ============================================================
 
 model:

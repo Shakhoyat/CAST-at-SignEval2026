@@ -9,8 +9,8 @@ Parameter count: ~1.5 K  (deliberately tiny — acts as a channel gate only)
 
 Reference
 ---------
-"Dual-Stream Cadence Velocity Diagram Fusion with Spatial Attention
-for Radar-Only Sign Language Recognition"
+"CAST at SignEval 2026: Channel-Aware Spatial Transfer Learning with
+Pseudo-Image Radar for Sign Language Recognition"
 MSLR Workshop @ CVPR 2026
 """
 

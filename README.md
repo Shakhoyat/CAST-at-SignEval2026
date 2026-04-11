@@ -1,6 +1,6 @@
-# RadarCVD-Net
+# CAST at SignEval 2026
 
-**Dual-Stream Cadence Velocity Diagram Fusion with Spatial Attention for Radar-Only Sign Language Recognition**
+**Channel-Aware Spatial Transfer Learning with Pseudo-Image Radar for Sign Language Recognition**
 
 > MSLR Workshop @ CVPR 2026 · Denver, Colorado, USA · June 3–4, 2026
 
@@ -8,49 +8,59 @@
 
 ## Overview
 
-RadarCVD-Net is a dual-stream convolutional-transformer architecture for sign language recognition using **only 60 GHz radar data** (no RGB or depth).  The model simultaneously processes:
+**CAST** is a dual-stream architecture for radar-only sign language recognition that uses **no RGB or depth data** — only raw 60 GHz radar Range-Time Maps (RTM).
 
-- **RTM stream** — three-antenna Range-Time Maps rendered as a 3-channel image, processed by EfficientNetV2-S
-- **CVD stream** — per-antenna Cadence-Velocity Diagrams (Doppler spectra) rendered as a 3-channel image, processed by ConvNeXt-Tiny
+The three design principles encoded in the acronym:
 
-Both streams pass through a lightweight **Cross-Antenna Self-Attention (CASA)** module before their backbone, and are fused via **asymmetric cross-attention** (RTM as query, CVD as key/value) with a learned gated residual.
+| Letter | Component | What it does |
+|---|---|---|
+| **C**hannel-**A**ware | Cross-Antenna Self-Attention (CASA) | Learns inter-antenna importance weights before the backbone |
+| **S**patial **T**ransfer | ImageNet-pretrained CNNs as backbones | Transfers spatial feature detectors to radar pseudo-images |
+| Pseudo-Image Radar | CVD computation | Converts RTM slow-time axis to a Cadence-Velocity Diagram image |
+
+### Architecture
 
 ```
-RTM₁ RTM₂ RTM₃  ──►  CASA  ──►  EfficientNetV2-S  ──►  proj  ──►  Q ─┐
-                                                                        ├─► Asymmetric Cross-Attn ──► gate ──► head ──► logits
-CVD₁ CVD₂ CVD₃  ──►  CASA  ──►  ConvNeXt-Tiny      ──►  proj  ──► K,V─┘
+RTM₁ RTM₂ RTM₃  ──►  CASA  ──►  EfficientNetV2-S  ──►  proj ──►  Q ─┐
+                                                                       ├─►  Cross-Attn  ──►  gate  ──►  head  ──►  logits
+CVD₁ CVD₂ CVD₃  ──►  CASA  ──►  ConvNeXt-Tiny      ──►  proj ──► K,V─┘
+(pseudo-image)
 ```
+
+- **RTM stream** — three RX-antenna Range-Time Maps stacked as a 3-channel image → EfficientNetV2-S
+- **CVD stream** — per-antenna Cadence-Velocity Diagrams (Doppler spectra via rFFT) rendered as a 3-channel pseudo-image → ConvNeXt-Tiny
+- **Fusion** — asymmetric cross-attention: RTM as query, CVD as key/value, plus a learned gated residual
 
 ---
 
 ## Results
 
-| Model | CV Top-1 Acc | Notes |
+| Model | CV Top-1 Acc | Setting |
 |---|---|---|
 | Single-backbone baseline (5-fold) | 77.2 ± 1.3% | EfficientNetV2-S, RTM only |
-| RadarCVD-Net (5-fold CV) | **80.5 ± 0.9%** | Full model, CASA 4-head |
-| RadarCVD-Net (single 90/10 run) | 81.73% | Kaggle leaderboard |
+| CAST (5-fold CV) | **80.5 ± 0.9%** | Full model, CASA 4-head |
+| CAST (single 90/10 run) | 81.73% | Kaggle leaderboard |
 | EfficientNetV2-S + ConvNeXt-Tiny Ensemble (10-fold) | 84.88% | Kaggle leaderboard |
 
-> **Note:** Kaggle leaderboard scores are not directly comparable across models due to different compute budgets (single run vs. 10-fold ensemble).
+> **Note:** Kaggle leaderboard scores reflect different compute budgets (single run vs. 10-fold ensemble) and are not directly comparable.
 
 ### Ablation (5-fold CV)
 
-| Variant | Top-1 Acc |
-|---|---|
-| RTM only (no CVD) | 79.6% |
-| + CVD stream (no linearisation) | 80.3% |
-| + CVD stream (with linearisation) | **80.5%** |
-| No CASA | 79.8% |
-| CASA 1-head | 80.2% |
-| CASA 4-heads | **80.5%** |
+| Variant | Top-1 Acc | Delta |
+|---|---|---|
+| RTM only — no CVD stream | 79.6% | baseline |
+| + CVD (no dB→linear step) | 80.3% | +0.7 pp |
+| + CVD (full pseudo-image pipeline) | **80.5%** | **+0.9 pp** |
+| No CASA | 79.8% | −0.7 pp |
+| CASA 1-head | 80.2% | −0.3 pp |
+| CASA 4-heads | **80.5%** | — |
 
 ---
 
 ## Repository Structure
 
 ```
-RadarCVD-Net/
+CAST/
 ├── README.md
 ├── LICENSE                         MIT
 ├── requirements.txt
@@ -58,55 +68,53 @@ RadarCVD-Net/
 │
 ├── src/                            Importable Python package
 │   ├── models/
-│   │   ├── casa.py                 Cross-Antenna Self-Attention
+│   │   ├── casa.py                 Cross-Antenna Self-Attention (CASA)
 │   │   ├── fusion.py               Asymmetric Cross-Attention Fusion
-│   │   └── radarcvd_net.py         Full RadarCVDNet model
+│   │   └── cast_model.py           CASTModel — full dual-stream model
 │   ├── data/
-│   │   ├── cvd.py                  Pseudo-CVD computation
+│   │   ├── cvd.py                  Pseudo-CVD computation (dB→BH window→rFFT)
 │   │   ├── augmentations.py        Physics-aware radar augmentations
 │   │   └── dataset.py              DualStreamRTMDataset + TestDualStreamDataset
 │   └── utils/
 │       └── training.py             EMA, MixUp, CutMix, cosine LR, validate
 │
 ├── configs/
-│   └── radarcvd_net.yaml           Full hyperparameter config
+│   └── cast.yaml                   All hyperparameters
 │
-└── notebooks/                      Kaggle-runnable notebooks
-    ├── 01_RadarCVD_Net_training_val0.8173.ipynb     Paper pipeline (81.73%)
-    ├── 02_ScoreMaximizer_V2_val0.8390.ipynb         V2 mega-ensemble (83.90%)
-    ├── 03_BestModel_KFold_Ensemble_val0.8488.ipynb  Best result (84.88%)
-    └── 04_Inference_TestSet_Combine.ipynb           Inference + submission merge
+└── notebooks/                      Kaggle-runnable, self-contained
+    ├── 01_CAST_training_val0.8173.ipynb              Paper model — CAST (81.73%)
+    ├── 02_ScoreMaximizer_V2_val0.8390.ipynb          V2 mega-ensemble (83.90%)
+    ├── 03_BestModel_KFold_Ensemble_val0.8488.ipynb   Best result (84.88%)
+    └── 04_Inference_TestSet_Combine.ipynb            Inference + submission merge
 ```
 
 ---
 
 ## Setup
 
-### Requirements
-
 ```bash
 pip install -r requirements.txt
 ```
 
-Tested with: Python 3.10, PyTorch 2.2, CUDA 12.1, timm 0.9.16.
+Tested with: Python 3.10 · PyTorch 2.2 · CUDA 12.1 · timm 0.9.16
 
 ### Dataset
 
-The **MultiMeDaLIS** dataset is available through the competition page:
+MultiMeDaLIS is available through the Kaggle competition:
 
-> [Kaggle — CVPR MSLR 2026 Track 2](https://www.kaggle.com/competitions/cvpr-mslr-2026-track-2)
+> [CVPR MSLR 2026 Track 2](https://www.kaggle.com/competitions/cvpr-mslr-2026-track-2)
 
-Expected directory layout after download:
+Expected layout:
 
 ```
 cvpr-mslr-2026-track-2/
 ├── train/
 │   ├── 0_CLASSNAME/
 │   │   └── SAMPLE_{id}/
-│   │       ├── SAMPLE{id}_RTM1.npy
+│   │       ├── SAMPLE{id}_RTM1.npy   # Antenna 1, shape (T, R), float32, dB
 │   │       ├── SAMPLE{id}_RTM2.npy
 │   │       └── SAMPLE{id}_RTM3.npy
-│   └── ... (126 classes)
+│   └── ... (126 classes total)
 ├── val/
 │   └── SAMPLE_{id}/
 └── test/
@@ -119,12 +127,12 @@ cvpr-mslr-2026-track-2/
 
 ### Option A — Kaggle Notebooks (recommended)
 
-The `notebooks/` directory contains self-contained Kaggle notebooks that auto-detect the dataset path.  Run them in order on a Kaggle P100/T4 GPU:
+Upload a notebook from `notebooks/` to a Kaggle P100/T4 session with the competition dataset attached and run cells top-to-bottom.
 
-| Notebook | Purpose | Expected Score |
+| Notebook | What it trains | Expected score |
 |---|---|---|
-| `01_RadarCVD_Net_training_val0.8173.ipynb` | Train RadarCVD-Net (paper model) | ~81.7% |
-| `02_ScoreMaximizer_V2_val0.8390.ipynb` | V2 pipeline with diverse backbones | ~83.9% |
+| `01_CAST_training_val0.8173.ipynb` | CAST (paper model) | ~81.7% |
+| `02_ScoreMaximizer_V2_val0.8390.ipynb` | V2 diverse-backbone ensemble | ~83.9% |
 | `03_BestModel_KFold_Ensemble_val0.8488.ipynb` | 10-fold ensemble (best result) | ~84.9% |
 | `04_Inference_TestSet_Combine.ipynb` | Merge val + test predictions | — |
 
@@ -132,9 +140,9 @@ The `notebooks/` directory contains self-contained Kaggle notebooks that auto-de
 
 ```python
 import torch
-from src.models import RadarCVDNet
+from src.models import CASTModel
 
-model = RadarCVDNet(
+model = CASTModel(
     num_classes=126,
     feat_dim=512,
     rtm_name="tf_efficientnetv2_s.in21k_ft_in1k",
@@ -142,17 +150,16 @@ model = RadarCVDNet(
     pretrained=True,
 )
 
-# Forward pass
-rtm_img = torch.randn(1, 3, 224, 224)   # 3-antenna RTM image
-cvd_img = torch.randn(1, 3, 224, 224)   # 3-antenna CVD image
+rtm_img = torch.randn(1, 3, 224, 224)   # 3-antenna RTM pseudo-image
+cvd_img = torch.randn(1, 3, 224, 224)   # 3-antenna CVD pseudo-image
 
 logits = model(rtm_img, cvd_img)         # (1, 126)
 
-# With auxiliary loss during training
+# With auxiliary heads during training
 logits, logits_rtm, logits_cvd = model(rtm_img, cvd_img, return_aux=True)
 ```
 
-### CVD Computation
+### CVD Pseudo-Image Computation
 
 ```python
 import numpy as np
@@ -168,7 +175,7 @@ cvd_db = compute_cvd(rtm_db, n_fft=128)                              # (R, 64)
 from torch.utils.data import DataLoader
 from src.data import DualStreamRTMDataset
 
-# sample_list: [(sample_dir, label), ...]
+# sample_list: [(sample_dir_path, label_int), ...]
 train_ds = DualStreamRTMDataset(sample_list, img_size=224, max_T=48, augment=True)
 loader   = DataLoader(train_ds, batch_size=24, shuffle=True, num_workers=4)
 
@@ -181,37 +188,35 @@ for rtm_imgs, cvd_imgs, labels in loader:
 
 ---
 
-## Architecture Details
+## Method Details
 
-### Cross-Antenna Self-Attention (CASA)
-
-A lightweight (~1.5 K parameter) pre-backbone module that learns inter-antenna importance weights via multi-head self-attention over spatial embeddings of each RX channel.  Applied independently to RTM and CVD inputs.
-
-### CVD Computation Pipeline
+### Pseudo-Image Radar (CVD computation)
 
 ```
-RTM (dB) → dB→linear → Blackman-Harris window → zero-pad to n_fft
-         → rFFT (slow-time axis) → |·| → drop DC → 20·log10 → CVD (dB)
+RTM (dB) → dB→linear → Blackman-Harris window (slow-time)
+         → zero-pad to n_fft → rFFT → |·| → drop DC → 20·log10 → CVD (dB)
 ```
 
-The CVD captures Doppler (velocity) information encoded in the slow-time dimension of the RTM, complementing the range-time structure.
+Each CVD image has shape `(R, n_fft/2)` — range bins × Doppler bins — mirroring the RTM spatial layout. Applied identically to all three antenna channels, then stacked into a 3-channel pseudo-image for the CVD backbone.
 
-### Fusion
+### Channel-Aware: CASA (~1.5 K parameters)
 
-Asymmetric cross-attention with RTM features as queries and CVD features as keys/values, followed by a position-wise FFN and a gated residual that blends the attended representation with the original RTM features.
+A lightweight pre-backbone module applied to both streams independently. For each RX-antenna channel, a shared convolutional stem extracts a 16-d spatial embedding. Multi-head self-attention across the three antenna tokens produces per-channel scalar gates in (0, 1), which re-weight the input channels before the backbone.
 
 ### Training Recipe
 
 | Component | Setting |
 |---|---|
-| Optimiser | AdamW, lr=3e-4, wd=0.05 |
-| Schedule | 5-epoch warmup + cosine annealing |
+| Optimiser | AdamW — lr 3×10⁻⁴, weight decay 0.05 |
+| Schedule | 5-epoch linear warmup + cosine annealing (70 epochs total) |
 | Augmentation | MixUp (α=0.4) + CutMix (α=1.0) + physics augmentations |
+| Physics aug | Time warp · magnitude warp · simulated multipath · antenna dropout |
 | Regularisation | Label smoothing 0.1, Dropout 0.3, DropPath 0.2 |
 | EMA | decay=0.9995 |
-| SWA | starts at epoch 56/70, lr=1e-5 |
-| Checkpointing | Top-5 val checkpoints ensembled at inference |
+| SWA | starts at epoch 56/70, lr=1×10⁻⁵ |
+| Checkpointing | Top-5 validation checkpoints ensembled at inference |
 | TTA | 5-view test-time augmentation |
+| Auxiliary loss | L = L_main + 0.3 × (L_rtm + L_cvd) |
 
 ---
 
@@ -220,9 +225,9 @@ Asymmetric cross-attention with RTM features as queries and CVD features as keys
 If you use this code, please cite:
 
 ```bibtex
-@inproceedings{radarcvdnet2026,
-  title     = {Dual-Stream Cadence Velocity Diagram Fusion with Spatial Attention
-               for Radar-Only Sign Language Recognition},
+@inproceedings{cast2026,
+  title     = {{CAST} at {SignEval} 2026: Channel-Aware Spatial Transfer Learning
+               with Pseudo-Image Radar for Sign Language Recognition},
   author    = {[Authors]},
   booktitle = {MSLR Workshop @ CVPR 2026},
   year      = {2026},
@@ -257,5 +262,5 @@ Please also cite the MultiMeDaLIS dataset:
 
 ## Acknowledgements
 
-Competition hosted by Raffaele Mineo et al. (University of Catania).
+Competition hosted by Raffaele Mineo et al. (University of Catania).  
 Supervised by Dr. Md. Milon Islam, Khulna University of Engineering & Technology.
