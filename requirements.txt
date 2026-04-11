@@ -1,0 +1,27 @@
+# Core deep learning
+torch>=2.1.0
+torchvision>=0.16.0
+
+# Model zoo (EfficientNetV2-S, ConvNeXt-Tiny)
+timm>=0.9.12
+
+# Einops (optional, used for shape manipulation)
+einops>=0.7.0
+
+# Scientific computing
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Data / I/O
+pandas>=2.0.0
+
+# Config
+PyYAML>=6.0
+
+# Visualisation (optional, for notebooks)
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Jupyter
+notebook>=7.0.0
+ipykernel>=6.0.0

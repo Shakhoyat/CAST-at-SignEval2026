@@ -1,0 +1,54 @@
+# ============================================================
+# RadarCVD-Net — Hyperparameter Configuration
+# CVPR MSLR 2026 Track 2 (Radar-Only)
+# ============================================================
+
+model:
+  num_classes: 126
+  feat_dim: 512
+  rtm_backbone: "tf_efficientnetv2_s.in21k_ft_in1k"   # EfficientNetV2-S (RTM stream)
+  cvd_backbone:  "convnext_tiny.fb_in22k_ft_in1k"      # ConvNeXt-Tiny    (CVD stream)
+  pretrained: true
+  drop_rate: 0.3
+  drop_path_rate: 0.2
+  casa_heads: 1          # 1 = paper default; 4 = +0.3 pp, higher VRAM
+
+data:
+  img_size: 224
+  max_time: 48           # slow-time frames (48 × 0.077 s ≈ 3.7 s)
+  n_fft: 128             # CVD Doppler resolution (n_fft // 2 bins)
+  val_frac: 0.10         # stratified holdout fraction
+  seed: 42
+
+training:
+  epochs: 70
+  batch_size: 24         # per GPU; multiply by num_gpus
+  lr: 3.0e-4
+  weight_decay: 0.05
+  label_smoothing: 0.10
+  warmup_epochs: 5
+  grad_clip: 1.0
+  use_amp: true
+  num_workers: 4
+
+augmentation:
+  mixup_alpha: 0.4
+  cutmix_alpha: 1.0
+  mix_prob: 0.50         # probability of applying MixUp *or* CutMix
+  noise_std: 0.02
+  freq_mask: 30
+  time_mask: 10
+
+ema:
+  decay: 0.9995          # exponential moving average decay
+
+swa:
+  start_frac: 0.80       # begin SWA at 80% of total epochs
+  lr: 1.0e-5
+
+checkpoint:
+  top_k_save: 5          # keep top-K val checkpoints for ensemble
+
+tta:
+  enabled: true
+  n_views: 5             # number of test-time augmentation views
